@@ -1,3 +1,2 @@
 # breadbox
-A local backup service for your favorite youtubers.
-
+BreadBox is a simple Python script that allows the user backup their favorite YouTube channels.
