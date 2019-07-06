@@ -21,22 +21,23 @@ def add_channel(channel_url):
     url_breakdown = urlparse(channel_url)
     channel_key = url_breakdown.path
     if re.match('/channel/\w+', channel_key):
-        new_channel_details = youtube.channels().list(id=channel_key[9:],
+        new_channel = youtube.channels().list(id=channel_key[9:],
                                   part='snippet').execute()
     elif re.match('/user/\w+', channel_key):
-        new_channel_details = youtube.channels().list(forUsername=channel_key[6:],
+        new_channel = youtube.channels().list(forUsername=channel_key[6:],
                                   part='snippet').execute()
     channel_file = open('contents.json', 'r', encoding='utf-8')
     channels = json.load(channel_file)
     channel_file.close()
     for channel in channels:
-        if channel['items'][0]['id'] == new_channel_details['items'][0]['id']:
+        if channel['items'][0]['id'] == new_channel['items'][0]['id']:
             raise ValueError('This channel is already saved to your BreadBox')
-    channels.append(new_channel_details)
+    channels.append(new_channel)
     with open('contents.json', 'w', encoding='utf-8') as outfile:
         json.dump(channels, outfile, ensure_ascii=False, indent=2)
-    print('New channel saved.')
-    sync_channel(new_channel_details)
+    print('New channel \"' + new_channel['items'][0]['snippet']['title']
+            + '\" has been added to your Breadbox.')
+    sync_channel(new_channel)
 
 
 # Function called when -r or --remove_channel is called in command line.
@@ -51,14 +52,20 @@ def remove_channel():
         removed = int(removed)
         try:
             channel = channels[removed - 1]
-            channel_file_path = os.path.curdir + '\\videos\\' + channel['items'][0]['snippet']['title']
-            channels.pop(removed - 1)
+            channel_file_path = os.path.curdir + '\\videos\\' \
+                                    + channel['items'][0]['snippet']['title']
+            removed_channel = channels.pop(removed - 1)
             with open('contents.json', 'w', encoding='utf-8') as contents_file:
                 json.dump(channels, contents_file, ensure_ascii=False, indent=2)
             shutil.rmtree(channel_file_path)
+            print("Channel \"" +
+                    removed_channel['items'][0]['snippet']['title']
+                    + "\" has been removed from your BreadBox.")
         except IndexError:
             print("Invalid Number. Please select a listed number.\n")
             remove_channel()
+    else:
+        print('\nYour BreadBox is already empty.\n')
 
 
 # Displays all channels in contents.json in numbered order.
@@ -94,15 +101,15 @@ def sync_channel(channel):
     print('Fetched.')
 
     # Checks if videos are saved to the BreadBox
-    print('Checking for discrepencies...')
+    print('\nChecking for missing local backups...')
     num_of_discrepencies = 0
     try:
         metadata_file = open(channel_file_path + '\\metadata.json',
                     'r', encoding='utf-8')
         metadata = json.load(metadata_file)
     except:
-        print('Creating new metadata...')
         metadata = []
+        print('No metadata saved. Creating new metadata...')
 
     for video in videos:
         video_in_box = False # Is the video saved? i.e. is the metadata here?
@@ -134,6 +141,7 @@ def sync_channel(channel):
     # Check if metadata from channel is missing anythong from locally backed-up
     # metadata.json
     print('\nChecking for videos missing on the channel...')
+    vids_not_online = []
     for metadatum in metadata:
         video_on_channel = False
         for video in videos:
@@ -141,8 +149,20 @@ def sync_channel(channel):
                 video_on_channel = True
 
         if video_on_channel == False:
-            print("Video with id " + str(metadatum['id']) + " is missing from the channel.")
-            print("Missing video "+ metadatum['snippet']['title'])
+            vids_not_online.append(metadatum)
+            print("Video with title \"" + metadatum['snippet']['title']
+                    + "\" is missing from the channel \""
+                    + channel['items'][0]['snippet']['title'] + "\"")
+
+    if len(vids_not_online) == 0:
+        print("The channel \"" + channel['items'][0]['snippet']['title']
+                + "\" is not missing any of your most recent 50 backups!")
+    else:
+        print("The channel \"" + channel['items'][0]['snippet']['title']
+                + "\" is missing " + len(vids_not_online) + " videos:\n")
+        for video in vids_not_online:
+            print(video['snippet']['title'])
+
 
 
 
@@ -169,55 +189,5 @@ def get_channel_videos(channel_id):
 
     return videos
 
-
-def Main():
-    print('Getting channe uploads...')
-    videos = get_channel_videos('UCE2UPZRd6nIo1XxIYyKsfjg')
-    print('Got \'em.')
-    print('num of vids is ' + str(len(videos)))
-
-
-    for video in videos:
-        title = video['snippet']['title'].lower()
-        title = re.sub('[^a-z0-9\-]', '_', title)
-        video['path'] = title
-
-    print('Checking for discrepencies...')
-
-    # st = short-term, lt = long-term
-    # checks for missing videos in box and then channel
-    metadata_file = open('metadata.json', 'r', encoding='utf-8')
-    metadata = json.load(metadata_file)
-    metadata_file.close()
-
-    # Checks if videos are saved to the BreadBox
-    for video in videos:
-        video_in_box = False
-        for metadatum in metadata:
-            # By default the search assumes that videos are saved as mp4. Change.
-            if metadatum['id'] == video['id']:
-                video_in_box = True
-
-        if video_in_box == False:
-            # If we find that the video is not in the BreadBox, download it, append
-            # its metadatum to the metadata dictionary, then dump the updated
-            # metadata dictoinary to metadata.json
-            print("Video with ID " + str(video['id']) + " is not saved to the BreadBox.")
-            print("Downloading...")
-            YouTube('https://www.youtube.com/watch?v='
-                    + video['contentDetails']['videoId']).streams.first(
-                    ).download(os.path.curdir + '\\videos', filename=video['path'])
-            metadata.append(video)
-            with open('metadata.json', 'w', encoding='utf-8') as metadata_file:
-                json.dump(metadata, metadata_file, ensure_ascii=False, indent=2)
-            print("Download complete.\n")
-
-    for n in range(50): # Checks if most recent 50 videos are still on channel
-        video_on_channel = False
-        for video in videos:
-            if metadata[n]['id'] == video['id']:
-                missing_video = True
-        if missing_video == False:
-            print("video with id " + str(video['id']) + " is missing from the channel.")
 
         #json.dump(videos, outfile, ensure_ascii=False, indent=2)
