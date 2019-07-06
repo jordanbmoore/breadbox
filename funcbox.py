@@ -79,15 +79,14 @@ def open_breadbox():
     if n == 1:
         print('Your BreadBox is empty.\n')
 
-
 # Takes channel dictionary from contents.json as input, updates existing
 # backup for most recent 50 videos.
 def sync_channel(channel):
     channel_file_path = os.path.curdir + '\\videos\\' + channel['items'][0]['snippet']['title']
     if os.path.exists(channel_file_path) == False:
         os.mkdir(channel_file_path)
-    print('Fetching most recent 50 videos from channel '
-            + channel['items'][0]['snippet']['title'] + '...')
+    print('Fetching most recent 50 videos from channel \"'
+            + channel['items'][0]['snippet']['title'] + '\"...')
     videos = get_channel_videos(channel['items'][0]['id'])
 
     # Add 'path' key to videos dict to be saved to metadata.json in

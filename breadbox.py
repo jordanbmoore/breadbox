@@ -1,6 +1,13 @@
 from funcbox import *
 import argparse
+import os
 
+if os.path.exists(os.path.curdir + "\\videos") == False:
+    os.mkdir('videos')
+
+if os.path.exists(os.path.curdir + "\\contents.json") == False:
+    with open('contents.json', 'w') as outfile:
+        json.dump([], outfile, ensure_ascii=False, indent=2)
 # Configure ArgumentParser
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
