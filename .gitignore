@@ -2,3 +2,7 @@ contents.json
 videos
 __init__.py
 __pycache__
+gui.py
+discrepencies.txt
+config.json
+notes.txt

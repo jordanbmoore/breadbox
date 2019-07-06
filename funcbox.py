@@ -11,7 +11,12 @@ from pytube import YouTube
 # YouTube('video_url').streams.first().download('save_path')
 
 
-api_key = 'AIzaSyCNU9V3NQe1pTQLHdqKQeWtuwi2sNGxSto'
+
+with open('config.json', 'r', encoding='utf-8') as config_file:
+    config = json.load(config_file)
+
+api_key, max_res = [config[i] for i in ('api_key', 'max_res')]
+
 youtube = build('youtube', 'v3', developerKey=api_key)
 
 # Function called when -a or --add_channel is called in command line.
@@ -82,6 +87,10 @@ def open_breadbox():
 # Takes channel dictionary from contents.json as input, updates existing
 # backup for most recent 50 videos.
 def sync_channel(channel):
+    # Clear discrepencies.txt
+    with open('discrepencies.txt', 'w') as outputs:
+        outputs.write('')
+
     channel_file_path = os.path.curdir + '\\videos\\' + channel['items'][0]['snippet']['title']
     if os.path.exists(channel_file_path) == False:
         os.mkdir(channel_file_path)
@@ -124,9 +133,7 @@ def sync_channel(channel):
             print("Video with ID " + str(video['id'])
                     + " is not saved to the BreadBox.")
             print("Downloading...")
-            YouTube('https://www.youtube.com/watch?v='
-                    + video['contentDetails']['videoId']).streams.first(
-                    ).download(channel_file_path, filename=video['path'])
+            download_at_max_res(video, channel_file_path)
             metadata.append(video)
             with open(channel_file_path + '\\metadata.json', 'w',
                                                 encoding='utf-8') as outfile:
@@ -149,24 +156,43 @@ def sync_channel(channel):
 
         if video_on_channel == False:
             vids_not_online.append(metadatum)
-            print("Video with title \"" + metadatum['snippet']['title']
-                    + "\" is missing from the channel \""
-                    + channel['items'][0]['snippet']['title'] + "\"")
 
     if len(vids_not_online) == 0:
         print("The channel \"" + channel['items'][0]['snippet']['title']
                 + "\" is not missing any of your most recent 50 backups!")
     else:
-        print("The channel \"" + channel['items'][0]['snippet']['title']
-                + "\" is missing " + len(vids_not_online) + " videos:\n")
+        message = "The channel \"" + channel['items'][0]['snippet']['title']
+        message += "\" is missing " + str(len(vids_not_online)) + " video(s):\n"
+        n = 0
         for video in vids_not_online:
-            print(video['snippet']['title'])
+            n += 1
+            message += str(n) + ". \"" + video['snippet']['title'] + "\"\n"
+        with open('discrepencies.txt', 'a') as outfile:
+            outfile.write(message + '\n\n')
+        print(message)
+
+def change_max_res():
+    possible_res = (2160, 1440, 1080, 720, 480, 360, 240)
+    print('Your current resolution is ' + str(max_res) + 'p.\n')
+    n = 0
+    for res in possible_res:
+        n += 1
+        print(str(n) + '. ' + str(possible_res[n-1]))
+    new_res_index = int(input("\nPlease select your resolution: ")) - 1
+    with open('config.json', 'r') as config_file:
+        config = json.load(config_file)
+        config['max_res'] = possible_res[new_res_index]
+    with open('config.json', 'w') as config_file:
+        json.dump(config, config_file, ensure_ascii=False, indent=2)
+    print('Your maximum resolution has been set to '
+            + str(possible_res[new_res_index]) + 'p.')
 
 
 
 
+# Takes in the string of channel_id and returns array of upload dictionary.
+# Only called in functions above ^
 def get_channel_videos(channel_id):
-
     # get Uploads playlist id
     res = youtube.channels().list(id=channel_id,
                                   part='contentDetails').execute()
@@ -189,4 +215,16 @@ def get_channel_videos(channel_id):
     return videos
 
 
-        #json.dump(videos, outfile, ensure_ascii=False, indent=2)
+def download_at_max_res(video, channel_file_path):
+    yt = YouTube('https://www.youtube.com/watch?v='
+                    + video['contentDetails']['videoId'])
+    res_arr =  [stream.resolution for stream in yt.streams.filter(progressive=True).all()]
+    int_res_arr = list(map(lambda res : int(res[:-1]), res_arr))
+    download_res = min(int_res_arr)
+    for res in int_res_arr:
+        if res > download_res and res <= max_res:
+            download_res = res
+    download_res = str(download_res) + 'p'
+
+    yt.streams.filter(res=download_res).first().download(channel_file_path,
+                                                    filename=video['path'])
