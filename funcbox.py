@@ -7,9 +7,7 @@ import argparse
 from urllib.parse import urlparse
 from apiclient.discovery import build
 from pytube import YouTube
-# to download to a certian directory:
-# YouTube('video_url').streams.first().download('save_path')
-
+from upload import *
 
 
 with open('config.json', 'r', encoding='utf-8') as config_file:
@@ -228,3 +226,11 @@ def download_at_max_res(video, channel_file_path):
 
     yt.streams.filter(res=download_res).first().download(channel_file_path,
                                                     filename=video['path'])
+
+
+def upload_mirror(video):
+    youtube = get_authenticated_service(args)
+    try:
+        initialize_upload(youtube, args)
+    except HttpError, e:
+        print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
