@@ -6,4 +6,7 @@ gui.py
 discrepencies.txt
 config.json
 notes.txt
+<<<<<<< HEAD
 client_secret.json
+=======
+>>>>>>> 25f382cc20439b4719b0e676a7621d79d4a76bcd
