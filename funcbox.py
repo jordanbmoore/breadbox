@@ -7,8 +7,13 @@ import argparse
 from urllib.parse import urlparse
 from apiclient.discovery import build
 from pytube import YouTube
-from upload import *
+import progressbar
 
+if os.path.exists(os.path.curdir + "\\config.json") == False:
+    api_key = input('Please input your YouTube Data API key: ')
+    config = {"api_key" : api_key, "max_res" : 1080}
+    with open('config.json', 'w') as outfile:
+        json.dump(config, outfile, ensure_ascii=False, indent=2)
 
 with open('config.json', 'r', encoding='utf-8') as config_file:
     config = json.load(config_file)
@@ -128,15 +133,19 @@ def sync_channel(channel):
             # append its metadatum to the metadata dictionary, then dump the
             # updated metadata dictoinary to metadata.json
             num_of_discrepencies += 1
-            print("Video with ID " + str(video['id'])
-                    + " is not saved to the BreadBox.")
+            print("Video \"" + str(video['snippet']['title'])
+                    + "\" is not saved to the BreadBox.")
             print("Downloading...")
-            download_at_max_res(video, channel_file_path)
-            metadata.append(video)
-            with open(channel_file_path + '\\metadata.json', 'w',
-                                                encoding='utf-8') as outfile:
-                json.dump(metadata, outfile, ensure_ascii=False, indent=2)
-            print("Download complete.\n")
+
+            try:
+                download_at_max_res(video, channel_file_path)
+                metadata.append(video)
+                with open(channel_file_path + '\\metadata.json', 'w',
+                                                    encoding='utf-8') as outfile:
+                    json.dump(metadata, outfile, ensure_ascii=False, indent=2)
+                print("Download complete.\n")
+            except:
+                print('Download failed.\n')
 
     if num_of_discrepencies == 0:
         print('No discrpencies found. Channel \"'
@@ -157,7 +166,7 @@ def sync_channel(channel):
 
     if len(vids_not_online) == 0:
         print("The channel \"" + channel['items'][0]['snippet']['title']
-                + "\" is not missing any of your most recent 50 backups!")
+                + "\" is not missing any of your most recent 50 backups!\n")
     else:
         message = "The channel \"" + channel['items'][0]['snippet']['title']
         message += "\" is missing " + str(len(vids_not_online)) + " video(s):\n"
@@ -214,9 +223,15 @@ def get_channel_videos(channel_id):
 
 
 def download_at_max_res(video, channel_file_path):
+    def progress_function(stream, chunk, file_handle, bytes_remaining):
+        size = stream.filesize
+        bar.update(size - bytes_remaining)
+
     yt = YouTube('https://www.youtube.com/watch?v='
-                    + video['contentDetails']['videoId'])
-    res_arr =  [stream.resolution for stream in yt.streams.filter(progressive=True).all()]
+                    + video['contentDetails']['videoId'],
+                    on_progress_callback=progress_function)
+    res_arr =  [stream.resolution for stream in yt.streams.filter(
+                                                        progressive=True).all()]
     int_res_arr = list(map(lambda res : int(res[:-1]), res_arr))
     download_res = min(int_res_arr)
     for res in int_res_arr:
@@ -224,13 +239,7 @@ def download_at_max_res(video, channel_file_path):
             download_res = res
     download_res = str(download_res) + 'p'
 
-    yt.streams.filter(res=download_res).first().download(channel_file_path,
-                                                    filename=video['path'])
+    yt_stream = yt.streams.filter(res=download_res)
 
-
-def upload_mirror(video):
-    youtube = get_authenticated_service(args)
-    try:
-        initialize_upload(youtube, args)
-    except HttpError, e:
-        print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
+    with progressbar.ProgressBar(max_value=yt_stream.first().filesize) as bar:
+        yt_stream.first().download(channel_file_path,filename=video['path'])

@@ -12,11 +12,6 @@ if os.path.exists(os.path.curdir + "\\contents.json") == False:
     with open('contents.json', 'w') as outfile:
         json.dump([], outfile, ensure_ascii=False, indent=2)
 
-if os.path.exists(os.path.curdir + "\\config.json") == False:
-    api_key = input(print('Please input your YouTube Data API key: '))
-    config = {"api_key" : api_key, "max_res" : 1080}
-    with open('config.json', 'w') as outfile:
-        json.dump(config, outfile, ensure_ascii=False, indent=2)
 
 if os.path.exists(os.path.curdir + "\\discrepencies.txt") == False:
     open('discrepencies.txt', 'w')
