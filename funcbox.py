@@ -6,8 +6,11 @@ import urllib.request
 import argparse
 from urllib.parse import urlparse
 from apiclient.discovery import build
+import pytube
 from pytube import YouTube
 import progressbar
+import youtube_dl
+import concurrent.futures
 
 if os.path.exists(os.path.curdir + "\\config.json") == False:
     api_key = input('Please input your YouTube Data API key: ')
@@ -122,6 +125,8 @@ def sync_channel(channel):
         metadata = []
         print('No metadata saved. Creating new metadata...')
 
+
+    missing_videos = []
     for video in videos:
         video_in_box = False # Is the video saved? i.e. is the metadata here?
         for metadatum in metadata:
@@ -135,17 +140,15 @@ def sync_channel(channel):
             num_of_discrepencies += 1
             print("Video \"" + str(video['snippet']['title'])
                     + "\" is not saved to the BreadBox.")
-            print("Downloading...")
+            missing_videos.append(video)
 
-            try:
-                download_at_max_res(video, channel_file_path)
-                metadata.append(video)
-                with open(channel_file_path + '\\metadata.json', 'w',
-                                                    encoding='utf-8') as outfile:
-                    json.dump(metadata, outfile, ensure_ascii=False, indent=2)
-                print("Download complete.\n")
-            except:
-                print('Download failed.\n')
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        executor.map(download_at_max_res, missing_videos, [channel_file_path]*len(missing_videos), [metadata]*len(missing_videos))
+
+
+    # download_at_max_res(video, channel_file_path, metadata)
+
 
     if num_of_discrepencies == 0:
         print('No discrpencies found. Channel \"'
@@ -222,24 +225,39 @@ def get_channel_videos(channel_id):
     return videos
 
 
-def download_at_max_res(video, channel_file_path):
-    def progress_function(stream, chunk, file_handle, bytes_remaining):
-        size = stream.filesize
-        bar.update(size - bytes_remaining)
+def download_at_max_res(video, channel_file_path, metadata):
+    # This function needs to be defined here in order to reference the specific
+    # progress bar for each individual download
+    # def progress_function(stream, chunk, file_handle, bytes_remaining):
+    #     mb_remaining = round(bytes_remaining/1000)
+    #     bar.update(vid_mb - mb_remaining)
+    #
+    # yt = YouTube('https://www.youtube.com/watch?v='
+    #                 + video['contentDetails']['videoId'],
+    #                 on_progress_callback=progress_function)
+    # res_arr =  [stream.resolution for stream in yt.streams.filter(
+    #                                                     progressive=True).all()]
+    # int_res_arr = list(map(lambda res : int(res[:-1]), res_arr))
+    # download_res = min(int_res_arr)
+    # for res in int_res_arr:
+    #     if res > download_res and res <= max_res:
+    #         download_res = res
+    # download_res = str(download_res) + 'p'
+    #
+    # yt_stream = yt.streams.filter(res=download_res)
+    # vid_mb = round(yt_stream.first().filesize/1000)
+    # with progressbar.ProgressBar(max_value=vid_mb) as bar:
+    #     yt_stream.first().download(channel_file_path,
+    #                                         filename=video['snippet']['title'])
 
-    yt = YouTube('https://www.youtube.com/watch?v='
-                    + video['contentDetails']['videoId'],
-                    on_progress_callback=progress_function)
-    res_arr =  [stream.resolution for stream in yt.streams.filter(
-                                                        progressive=True).all()]
-    int_res_arr = list(map(lambda res : int(res[:-1]), res_arr))
-    download_res = min(int_res_arr)
-    for res in int_res_arr:
-        if res > download_res and res <= max_res:
-            download_res = res
-    download_res = str(download_res) + 'p'
-
-    yt_stream = yt.streams.filter(res=download_res)
-
-    with progressbar.ProgressBar(max_value=yt_stream.first().filesize) as bar:
-        yt_stream.first().download(channel_file_path,filename=video['path'])
+    try:
+        ydl_opts = {'outtmpl': channel_file_path + '/' + video['snippet']['title']}
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            ydl.download(['https://www.youtube.com/watch?v=' + video['contentDetails']['videoId']])
+        metadata.append(video)
+        with open(channel_file_path + '\\metadata.json', 'w',
+                                            encoding='utf-8') as outfile:
+            json.dump(metadata, outfile, ensure_ascii=False, indent=2)
+        print("Download complete.\n")
+    except:
+        print('Download failed.\n')
